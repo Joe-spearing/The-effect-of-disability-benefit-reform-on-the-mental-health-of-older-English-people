@@ -578,7 +578,7 @@ subset(full.data.set,mob>=0&mob_dv>=0)[,'mob_dv'])
 stargazer(full.data.set)
 
 #function for creating p.observed
-function(df,id,wave.var,predictors,discrete){
+attach_observed_propensity_score<-function(df,id,wave.var,predictors,discrete){
   
   pids.in.sample<-unique(subset(df,wave_number<=20)[,id])
   observations.df<-as.data.frame(
@@ -618,16 +618,59 @@ function(df,id,wave.var,predictors,discrete){
                                     predictors[discrete==1],')',sep='',
                                     collapse = "+"),sep='+',collapse = "+"))),
                       family = binomial(link = "logit"), 
-                      data = subset(observations.df,wave_number>19))
+                      data = subset(observations.df,wave_number>19),
+                    na.action = na.exclude)
   
+  model.prediction<-cbind(subset(observations.df,wave_number>19),predict(observed.model))
+  
+  df<-cbind(df,
+            model.prediction[match(interaction(df[,id],df[,wave.var]),
+                  interaction(model.prediction[,id],model.prediction[,wave.var])),'predict(observed.model)'])
+  
+  colnames(df)[ncol(df)]<-'predicted_p_observed'
+  
+  df[,'predicted_p_observed']<-exp(df[,'predicted_p_observed'])/(1+exp(df[,'predicted_p_observed']))
+  
+  return(df)
 
-  
 }
 
+df.new<-attach_observed_propensity_score(full.data.set,'pid','wave_number',
+                                         c('sex','health','my_age','education','GHQ12_caseness'),
+                                         c(1,1,0,1,0))
+
 #save this new data
-write.csv(full.data.set,'clean_UKHLS_pip_rd_data.CSV')
+write.csv(df.new,'clean_UKHLS_pip_rd_data_v2.CSV')
 
 #Notes: drop if DLA>200
 #Add region
 
 plot(density(subset(full.data.set,PIP<=100&PIP>=0)[,'PIP']))
+
+#share of DLA claimants not receiving DLA income
+nrow(subset(full.data.set,claims_DLA==1&dla_positive==0))/
+  nrow(subset(full.data.set,claims_DLA==1))
+#share of PIP claimants not receiving PIP income
+nrow(subset(full.data.set,claims_PIP==1&pip_positive==0))/
+  nrow(subset(full.data.set,claims_PIP==1))
+#share of non-DLA claimants with DLA income
+nrow(subset(full.data.set,claims_DLA==0&dla_positive==1))/
+  nrow(subset(full.data.set,claims_DLA==0))
+#share of non-PIP claimants with PIP income
+nrow(subset(full.data.set,claims_PIP==0&pip_positive==1))/
+  nrow(subset(full.data.set,claims_PIP==0))
+
+#how many people claim DLA/PIP but never have DLA/PIP income?
+sample.period.income.and.claims<-cbind(aggregate(DLA~pid,FUN=sum,
+                                       data=subset(full.data.set,DLA>=0&claims_DLA>=0&PIP>=0&claims_PIP>=0)),
+                                       aggregate(claims_DLA~pid,FUN=sum,
+                                       data=subset(full.data.set,DLA>=0&claims_DLA>=0&PIP>=0&claims_PIP>=0)),
+                                       aggregate(PIP~pid,FUN=sum,
+                                                 data=subset(full.data.set,DLA>=0&claims_DLA>=0&PIP>=0&claims_PIP>=0)),
+                                       aggregate(claims_PIP~pid,FUN=sum,
+                                                 data=subset(full.data.set,DLA>=0&claims_DLA>=0&PIP>=0&claims_PIP>=0)))
+
+nrow(subset(sample.period.income.and.claims,DLA==0&claims_DLA>0))/
+  nrow(subset(sample.period.income.and.claims,claims_DLA>0))
+nrow(subset(sample.period.income.and.claims,PIP==0&claims_PIP>0))/
+  nrow(subset(sample.period.income.and.claims,claims_PIP>0))
