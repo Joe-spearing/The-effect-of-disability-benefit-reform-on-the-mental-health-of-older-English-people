@@ -47,7 +47,7 @@ for (val in count.to.twelve){
   assign(df_name,df)
 }
 
-cross.wave.data<-read_dta('xwavedat_protect.DTA')
+cross.wave.data<-as.data.frame(read_dta('xwavedat_protect.DTA'))
 
 #create some df lists
 indresp.list<-list(indresp_1,indresp_2,indresp_3,indresp_4,indresp_5,indresp_6,indresp_7,indresp_8,indresp_9,indresp_10,
@@ -641,6 +641,21 @@ df.new<-attach_observed_propensity_score(full.data.set,'pid','wave_number',
 
 #save this new data
 write.csv(df.new,'clean_UKHLS_pip_rd_data_v2.CSV')
+
+##################
+#Adding in deaths#
+##################
+
+present.in.wave.28<-unique(subset(df.new,wave_number>=28)[,'pid'])
+dead.before.wave.28<-subset(cross.wave.data,dcsedw_dv<=28&dcsedw_dv>0)[,'pidp']
+
+deaths.df<-as.data.frame(
+           cbind(c(present.in.wave.28,dead.before.wave.28),
+                 c(seq(from=0,to=0,length.out=length(present.in.wave.28)),
+                 seq(from=1,to=1,length.out=length(dead.before.wave.28)))))
+colnames(deaths.df)<-c('pid','died_before_wave_28')
+
+write.csv(deaths.df,'deaths_by_wave_28.CSV')
 
 #Notes: drop if DLA>200
 #Add region
