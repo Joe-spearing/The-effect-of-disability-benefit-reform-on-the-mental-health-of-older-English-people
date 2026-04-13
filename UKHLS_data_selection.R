@@ -486,6 +486,26 @@ dla.pip.payments<-as.data.frame(full.data.set[,'PIP']+
 benefits.payments<-as.data.frame(full.data.set[,'PIP']+
                                 full.data.set[,'DLA']+
                                    full.data.set[,'AA'])
+
+#Load the regression results of CESD on GHQ12 components
+setwd('J:\\Data\\UKDA-5050-stata\\stata\\stata13_se')
+cesd.ghq12.coefficients<-read.csv('predict_CESD_reg.CSV')
+
+predicted.cesd<-matrix(data=cesd.ghq12.coefficients[1,2],
+                       ncol=1,nrow=nrow(full.data.set))
+
+for (val in seq(from=1,to=12,by=1)){
+    for (y in c(1,2,3)){
+      predicted.cesd<-predicted.cesd+
+      as.numeric(full.data.set[,paste('GHQ',val,sep='')]==(y+1))*
+      cesd.ghq12.coefficients[1+3*(val-1)+y,2]
+    }
+}
+
+colnames(predicted.cesd)<-'predicted_CESD'
+full.data.set<-cbind(full.data.set,predicted.cesd)
+
+#Then get the GHQ12 caseness
 for (val in seq(from=1,to=12,by=1)){
   full.data.set[,paste('GHQ',val,sep='')]<-ifelse(full.data.set[,paste('GHQ',val,sep='')]<3,
                                             0,1)
@@ -527,6 +547,10 @@ colnames(high.ghq12caseness)<-'high_GHQ12_caseness'
 full.data.set<-cbind(full.data.set,dla.pos,pip.pos,dla.or.pip.pos,dla.pip.payments,
                benefits.payments,
                good.health,ghq12.caseness,working,retired,high.ghq12caseness)
+
+#Check that the GHQ12 casness and the predicted CESD are correlated
+cor(subset(full.data.set,GHQ12_caseness>=0&is.na(predicted_CESD)==FALSE)[,'predicted_CESD'],
+    subset(full.data.set,GHQ12_caseness>=0&is.na(predicted_CESD)==FALSE)[,'GHQ12_caseness'])
 
 my.age<-as.data.frame(
   ifelse(full.data.set[,'year']>0&full.data.set[,'yob']>0&
@@ -640,6 +664,7 @@ df.new<-attach_observed_propensity_score(full.data.set,'pid','wave_number',
                                          c(1,1,0,1,0))
 
 #save this new data
+setwd('J:\\Data\\UKHLS\\stata\\stata14_se\\ukhls')
 write.csv(df.new,'clean_UKHLS_pip_rd_data_v2.CSV')
 
 ##################
