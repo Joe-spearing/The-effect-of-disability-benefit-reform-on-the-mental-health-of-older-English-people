@@ -47,7 +47,7 @@ for (val in count.to.twelve){
   assign(df_name,df)
 }
 
-cross.wave.data<-as.data.frame(read_dta('xwavedat_protect.DTA'))
+cross.wave.data<-read_dta('xwavedat_protect.DTA')
 
 #create some df lists
 indresp.list<-list(indresp_1,indresp_2,indresp_3,indresp_4,indresp_5,indresp_6,indresp_7,indresp_8,indresp_9,indresp_10,
@@ -486,26 +486,6 @@ dla.pip.payments<-as.data.frame(full.data.set[,'PIP']+
 benefits.payments<-as.data.frame(full.data.set[,'PIP']+
                                 full.data.set[,'DLA']+
                                    full.data.set[,'AA'])
-
-#Load the regression results of CESD on GHQ12 components
-setwd('J:\\Data\\UKDA-5050-stata\\stata\\stata13_se')
-cesd.ghq12.coefficients<-read.csv('predict_CESD_reg.CSV')
-
-predicted.cesd<-matrix(data=cesd.ghq12.coefficients[1,2],
-                       ncol=1,nrow=nrow(full.data.set))
-
-for (val in seq(from=1,to=12,by=1)){
-    for (y in c(1,2,3)){
-      predicted.cesd<-predicted.cesd+
-      as.numeric(full.data.set[,paste('GHQ',val,sep='')]==(y+1))*
-      cesd.ghq12.coefficients[1+3*(val-1)+y,2]
-    }
-}
-
-colnames(predicted.cesd)<-'predicted_CESD'
-full.data.set<-cbind(full.data.set,predicted.cesd)
-
-#Then get the GHQ12 caseness
 for (val in seq(from=1,to=12,by=1)){
   full.data.set[,paste('GHQ',val,sep='')]<-ifelse(full.data.set[,paste('GHQ',val,sep='')]<3,
                                             0,1)
@@ -547,10 +527,6 @@ colnames(high.ghq12caseness)<-'high_GHQ12_caseness'
 full.data.set<-cbind(full.data.set,dla.pos,pip.pos,dla.or.pip.pos,dla.pip.payments,
                benefits.payments,
                good.health,ghq12.caseness,working,retired,high.ghq12caseness)
-
-#Check that the GHQ12 casness and the predicted CESD are correlated
-cor(subset(full.data.set,GHQ12_caseness>=0&is.na(predicted_CESD)==FALSE)[,'predicted_CESD'],
-    subset(full.data.set,GHQ12_caseness>=0&is.na(predicted_CESD)==FALSE)[,'GHQ12_caseness'])
 
 my.age<-as.data.frame(
   ifelse(full.data.set[,'year']>0&full.data.set[,'yob']>0&
@@ -602,7 +578,7 @@ subset(full.data.set,mob>=0&mob_dv>=0)[,'mob_dv'])
 stargazer(full.data.set)
 
 #function for creating p.observed
-attach_observed_propensity_score<-function(df,id,wave.var,predictors,discrete){
+function(df,id,wave.var,predictors,discrete){
   
   pids.in.sample<-unique(subset(df,wave_number<=20)[,id])
   observations.df<-as.data.frame(
@@ -642,75 +618,16 @@ attach_observed_propensity_score<-function(df,id,wave.var,predictors,discrete){
                                     predictors[discrete==1],')',sep='',
                                     collapse = "+"),sep='+',collapse = "+"))),
                       family = binomial(link = "logit"), 
-                      data = subset(observations.df,wave_number>19),
-                    na.action = na.exclude)
+                      data = subset(observations.df,wave_number>19))
   
-  model.prediction<-cbind(subset(observations.df,wave_number>19),predict(observed.model))
-  
-  df<-cbind(df,
-            model.prediction[match(interaction(df[,id],df[,wave.var]),
-                  interaction(model.prediction[,id],model.prediction[,wave.var])),'predict(observed.model)'])
-  
-  colnames(df)[ncol(df)]<-'predicted_p_observed'
-  
-  df[,'predicted_p_observed']<-exp(df[,'predicted_p_observed'])/(1+exp(df[,'predicted_p_observed']))
-  
-  return(df)
 
+  
 }
 
-df.new<-attach_observed_propensity_score(full.data.set,'pid','wave_number',
-                                         c('sex','health','my_age','education','GHQ12_caseness'),
-                                         c(1,1,0,1,0))
-
 #save this new data
-setwd('J:\\Data\\UKHLS\\stata\\stata14_se\\ukhls')
-write.csv(df.new,'clean_UKHLS_pip_rd_data_v2.CSV')
-
-##################
-#Adding in deaths#
-##################
-
-present.in.wave.28<-unique(subset(df.new,wave_number>=28)[,'pid'])
-dead.before.wave.28<-subset(cross.wave.data,dcsedw_dv<=28&dcsedw_dv>0)[,'pidp']
-
-deaths.df<-as.data.frame(
-           cbind(c(present.in.wave.28,dead.before.wave.28),
-                 c(seq(from=0,to=0,length.out=length(present.in.wave.28)),
-                 seq(from=1,to=1,length.out=length(dead.before.wave.28)))))
-colnames(deaths.df)<-c('pid','died_before_wave_28')
-
-write.csv(deaths.df,'deaths_by_wave_28.CSV')
+write.csv(full.data.set,'clean_UKHLS_pip_rd_data.CSV')
 
 #Notes: drop if DLA>200
 #Add region
 
 plot(density(subset(full.data.set,PIP<=100&PIP>=0)[,'PIP']))
-
-#share of DLA claimants not receiving DLA income
-nrow(subset(full.data.set,claims_DLA==1&dla_positive==0))/
-  nrow(subset(full.data.set,claims_DLA==1))
-#share of PIP claimants not receiving PIP income
-nrow(subset(full.data.set,claims_PIP==1&pip_positive==0))/
-  nrow(subset(full.data.set,claims_PIP==1))
-#share of non-DLA claimants with DLA income
-nrow(subset(full.data.set,claims_DLA==0&dla_positive==1))/
-  nrow(subset(full.data.set,claims_DLA==0))
-#share of non-PIP claimants with PIP income
-nrow(subset(full.data.set,claims_PIP==0&pip_positive==1))/
-  nrow(subset(full.data.set,claims_PIP==0))
-
-#how many people claim DLA/PIP but never have DLA/PIP income?
-sample.period.income.and.claims<-cbind(aggregate(DLA~pid,FUN=sum,
-                                       data=subset(full.data.set,DLA>=0&claims_DLA>=0&PIP>=0&claims_PIP>=0)),
-                                       aggregate(claims_DLA~pid,FUN=sum,
-                                       data=subset(full.data.set,DLA>=0&claims_DLA>=0&PIP>=0&claims_PIP>=0)),
-                                       aggregate(PIP~pid,FUN=sum,
-                                                 data=subset(full.data.set,DLA>=0&claims_DLA>=0&PIP>=0&claims_PIP>=0)),
-                                       aggregate(claims_PIP~pid,FUN=sum,
-                                                 data=subset(full.data.set,DLA>=0&claims_DLA>=0&PIP>=0&claims_PIP>=0)))
-
-nrow(subset(sample.period.income.and.claims,DLA==0&claims_DLA>0))/
-  nrow(subset(sample.period.income.and.claims,claims_DLA>0))
-nrow(subset(sample.period.income.and.claims,PIP==0&claims_PIP>0))/
-  nrow(subset(sample.period.income.and.claims,claims_PIP>0))
